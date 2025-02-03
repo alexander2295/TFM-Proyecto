@@ -1,0 +1,92 @@
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=no  # Cambiado a 'no' para mayor seguridad
+      - ZOOKEEPER_USER=your_username  # Añadir autenticación
+      - ZOOKEEPER_PASSWORD=your_password  # Añadir autenticación
+      - ZOO_ENABLE_AUTH=yes  # Habilitar autenticación
+    networks:
+      - kafkanet
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/bitnami/zookeeper
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:3.3
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      - ALLOW_PLAINTEXT_LISTENER=no  # Cambiado a 'no' para mayor seguridad
+      - KAFKA_SSL_KEYSTORE_LOCATION=/opt/bitnami/kafka/ssl/kafka.keystore.jks  # Configura tu keystore
+      - KAFKA_SSL_KEYSTORE_PASSWORD=your_keystore_password  # Cambia esta contraseña
+      - KAFKA_SSL_TRUSTSTORE_LOCATION=/opt/bitnami/kafka/ssl/kafka.truststore.jks  # Configura tu truststore
+      - KAFKA_SSL_TRUSTSTORE_PASSWORD=your_truststore_password  # Cambia esta contraseña
+    networks:
+      - kafkanet
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    depends_on:
+      - zookeeper
+    restart: unless-stopped
+
+  kafka-connect:
+    image: debezium/connect:2.0
+    environment:
+      - BOOTSTRAP_SERVERS=kafka:9092
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=my_connect_configs
+      - OFFSET_STORAGE_TOPIC=my_connect_offsets
+      - STATUS_STORAGE_TOPIC=my_connect_statuses
+    networks:
+      - kafkanet
+    ports:
+      - "8083:8083"
+    volumes:
+      - connectors_data:/kafka/connect/connectors
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  kafka_exporter:
+    image: danielqsj/kafka-exporter
+    ports:
+      - "9308:9308"
+    environment:
+      - KAFKA_SERVER=kafka:9092  # Actualizado para un solo broker
+    networks:
+      - kafkanet
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-docker
+    environment:
+      - MYSQL_ROOT_PASSWORD=Barcelona-22  # Contraseña para el usuario root
+      - MYSQL_DATABASE=youtube_data      # Nombre de la base de datos a crear
+      - MYSQL_USER=dary                  # Usuario adicional
+      - MYSQL_PASSWORD=Barcelona-22      # Contraseña del usuario adicional
+    ports:
+      - "3306:3306"
+    networks:
+      - kafkanet
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+networks:
+  kafkanet:
+    driver: bridge
+
+volumes:
+  zookeeper_data: {}
+  kafka_data: {}
+  connectors_data: {}
+  mysql_data: {}
